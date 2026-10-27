@@ -78,6 +78,10 @@ if HAS_FLASK:
 
     @app.route("/")
     def index():
+        root_index = os.path.join(BASE_DIR, "index.html")
+        if os.path.exists(root_index):
+            with open(root_index, "r", encoding="utf-8") as f:
+                return f.read()
         return render_template("index.html")
 
     @app.route("/api/simulasi", methods=["POST"])
@@ -109,7 +113,8 @@ else:
         def do_GET(self):
             parsed = urllib.parse.urlparse(self.path).path
             if parsed == "/" or parsed == "/index.html":
-                index_path = os.path.join(TEMPLATES_DIR, "index.html")
+                root_index = os.path.join(BASE_DIR, "index.html")
+                index_path = root_index if os.path.exists(root_index) else os.path.join(TEMPLATES_DIR, "index.html")
                 if os.path.exists(index_path):
                     with open(index_path, "rb") as f:
                         content = f.read()
@@ -120,7 +125,7 @@ else:
                     self.wfile.write(content)
                     return
                 else:
-                    self.send_error(404, "File templates/index.html tidak ditemukan")
+                    self.send_error(404, "File index.html tidak ditemukan")
                     return
             elif parsed.startswith("/static/"):
                 return super().do_GET()

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tugas 4 Analisis Numerik - Mohammad Agung Dwi Mardika</title>
-    <link rel="stylesheet" href="/static/css/style.css">
+    <link rel="stylesheet" href="./static/css/style.css">
     <!-- Chart.js untuk visualisasi grafik kurva -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -45,13 +45,13 @@
 
     <!-- Main Content Area -->
     <main class="main-container">
-        <!-- Banner Narasi Tugas (Alami, Santai, Tidak Kaku) -->
+        <!-- Banner Narasi Tugas -->
         <section class="task-intro-card">
             <div class="task-intro-header">
                 <span class="task-pill">Tugas 4 &bull; Analisis Numerik</span>
             </div>
             <p class="task-intro-text">
-                Website interaktif ini disusun oleh <strong>Mohammad Agung Dwi Mardika</strong> (NIM: <strong>2511016110012</strong>) untuk memenuhi <strong>Tugas 4 mata kuliah Analisis Numerik</strong>. Di sini disajikan perbandingan langkah komputasi pencarian akar fungsi nonlinear melalui tiga pendekatan: <strong>Metode Tabel</strong> (penelusuran inkremental), <strong>Metode Bagi Dua (Bisection)</strong> (pengurung interval tertutup), dan <strong>Metode Newton-Raphson</strong> (pendekatan garis singgung turunan).
+                Website simulasi interaktif ini disusun oleh <strong>Mohammad Agung Dwi Mardika</strong> (NIM: <strong>2511016110012</strong>) untuk memenuhi <strong>Tugas 4 mata kuliah Analisis Numerik</strong>. Aplikasi ini menyajikan perbandingan langkah komputasi pencarian akar fungsi nonlinear melalui tiga pendekatan: <strong>Metode Tabel</strong> (penelusuran inkremental), <strong>Metode Bagi Dua (Bisection)</strong> (pengurung interval tertutup), dan <strong>Metode Newton-Raphson</strong> (pendekatan garis singgung turunan).
             </p>
         </section>
 
@@ -66,9 +66,9 @@
             <!-- Preset Cepat -->
             <div class="preset-box">
                 <span class="preset-label">Uji Contoh Cepat:</span>
-                <button type="button" class="btn-preset" data-func="x**3 - x - 2" data-a="1" data-b="2" data-x0="1.5">x³ - x - 2 = 0</button>
+                <button type="button" class="btn-preset" data-func="x^3 - x - 2" data-a="1" data-b="2" data-x0="1.5">x³ - x - 2 = 0</button>
                 <button type="button" class="btn-preset" data-func="exp(-x) - x" data-a="0" data-b="1" data-x0="0.5">e⁻ˣ - x = 0</button>
-                <button type="button" class="btn-preset" data-func="x**2 - 4" data-a="1" data-b="3" data-x0="1">x² - 4 = 0</button>
+                <button type="button" class="btn-preset" data-func="x^2 - 4" data-a="1" data-b="3" data-x0="1">x² - 4 = 0</button>
                 <button type="button" class="btn-preset" data-func="cos(x) - x" data-a="0" data-b="1" data-x0="0.5">cos(x) - x = 0</button>
             </div>
         </header>
@@ -84,14 +84,14 @@
                     <!-- Input Fungsi f(x) -->
                     <div class="form-group">
                         <label for="input-func">Fungsi f(x)</label>
-                        <input type="text" id="input-func" name="fungsi" value="x**3 - x - 2" placeholder="contoh: x**3 - x - 2" required>
-                        <span class="input-hint">Operator: +, -, *, /, **, sin, cos, tan, exp, log, sqrt</span>
+                        <input type="text" id="input-func" name="fungsi" value="x^3 - x - 2" placeholder="contoh: x^3 - x - 2 atau 2x - 4" required>
+                        <span class="input-hint">Operator: +, -, *, /, ^, sin, cos, tan, exp, ln, log, sqrt</span>
                     </div>
 
                     <!-- Input Khusus Newton: Turunan f'(x) -->
                     <div class="form-group method-field newton-only" style="display: none;">
                         <label for="input-dfunc">Turunan f'(x) <span class="badge-optional">Opsional</span></label>
-                        <input type="text" id="input-dfunc" name="dfungsi" placeholder="contoh: 3*x**2 - 1 (kosong = numerik)">
+                        <input type="text" id="input-dfunc" name="dfungsi" placeholder="contoh: 3*x^2 - 1 (kosong = numerik)">
                         <span class="input-hint">Jika dikosongkan, turunan f'(x) dihitung secara numerik</span>
                     </div>
 
@@ -124,7 +124,7 @@
                     <div class="form-row method-field bisection-and-newton" style="display: none;">
                         <div class="form-group col">
                             <label for="input-tol">Toleransi Error (ε)</label>
-                            <input type="text" id="input-tol" name="tol" value="0.001">
+                            <input type="text" id="input-tol" name="tol" value="0.0001">
                         </div>
                         <div class="form-group col">
                             <label for="input-max-iter">Maks. Iterasi</label>
@@ -195,9 +195,25 @@
 
         <!-- Tabel Iterasi Detail -->
         <section class="card table-card" id="results-section">
-            <div class="card-header">
-                <h2>Tabel Komputasi Langkah demi Langkah</h2>
-                <p class="text-muted" id="table-subtitle">Hasil evaluasi numerik langkah demi langkah.</p>
+            <div class="card-header flex-between">
+                <div>
+                    <h2>Tabel Komputasi Langkah demi Langkah</h2>
+                    <p class="text-muted" id="table-subtitle">Hasil evaluasi numerik langkah demi langkah.</p>
+                </div>
+                <div class="table-actions">
+                    <select id="select-precision" class="precision-select" title="Presisi angka desimal">
+                        <option value="3">3 Desimal</option>
+                        <option value="4" selected>4 Desimal</option>
+                        <option value="5">5 Desimal</option>
+                        <option value="6">6 Desimal</option>
+                    </select>
+                    <button type="button" class="btn btn-secondary" id="btn-copy-table" title="Salin data tabel ke clipboard (bisa langsung ditempel ke Word/Excel)">
+                        📋 Salin Tabel
+                    </button>
+                    <button type="button" class="btn btn-secondary" id="btn-download-csv" title="Unduh tabel sebagai file CSV">
+                        📥 Unduh CSV
+                    </button>
+                </div>
             </div>
             <div class="card-body table-responsive">
                 <table class="data-table" id="iteration-table">
@@ -206,7 +222,7 @@
                     </thead>
                     <tbody id="table-body">
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-4">
+                            <td colspan="8" class="text-center text-muted py-4">
                                 Klik tombol <strong>"Jalankan Simulasi"</strong> untuk melihat rincian tabel perhitungan.
                             </td>
                         </tr>
@@ -238,6 +254,6 @@
         </div>
     </footer>
 
-    <script src="/static/js/script.js"></script>
+    <script src="./static/js/script.js"></script>
 </body>
 </html>

@@ -539,7 +539,25 @@ input[type="number"]:focus {
    ========================================================================== */
 .table-actions {
     display: flex;
+    align-items: center;
     gap: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.precision-select {
+    background-color: #ffffff;
+    border: 1px solid var(--border-color);
+    color: var(--text-secondary);
+    font-size: 0.775rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: var(--font-sans);
+}
+
+.precision-select:focus {
+    outline: none;
+    border-color: var(--accent-blue);
 }
 
 .table-responsive {

@@ -1,6 +1,7 @@
 /**
  * script.js - Logika Interaktif Simulasi Analisis Numerik
  * Tugas 4 Analisis Numerik - Mohammad Agung Dwi Mardika (NIM: 2511016110012)
+ * Didukung kalkulasi Client-Side murni (kompatibel GitHub Pages & Offline).
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -8,6 +9,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let currentMethod = "tabel"; // 'tabel' | 'bisection' | 'newton'
     let chartInstance = null;
     let lastResultData = null;
+    let currentPrecision = 4; // Default presisi desimal
 
     // DOM Elements
     const navButtons = document.querySelectorAll(".nav-btn");
@@ -20,6 +22,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const chartStatus = document.getElementById("chart-status");
     const conclusionSection = document.getElementById("conclusion-section");
     const conclusionText = document.getElementById("conclusion-text");
+
+    // Action Buttons & Selectors
+    const btnCopyTable = document.getElementById("btn-copy-table");
+    const btnDownloadCsv = document.getElementById("btn-download-csv");
+    const selectPrecision = document.getElementById("select-precision");
 
     // Summary Elements
     const statAkar = document.getElementById("stat-akar");
@@ -45,7 +52,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const inputTol = document.getElementById("input-tol");
     const inputMaxIter = document.getElementById("input-max-iter");
 
-    // Metadata untuk masing-masing metode
+    // ==========================================
+    // METADATA & TEORI METODE
+    // ==========================================
     const METHOD_CONFIG = {
         tabel: {
             title: "Metode Tabel (Pencarian Inkremental)",
@@ -136,7 +145,304 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     };
 
-    // Inisialisasi Navigasi & Form
+    // ==========================================
+    // MESIN MATEMATIKA CLIENT-SIDE (JAVASCRIPT)
+    // ==========================================
+    function sanitizeExpr(expr) {
+        let s = expr.trim();
+        // Ganti operator pangkat ^ menjadi **
+        s = s.replace(/\^/g, '**');
+
+        // Ganti logaritma natural
+        s = s.replace(/\bln\(/g, 'Math.log(');
+        s = s.replace(/\blog10\(/g, 'Math.log10(');
+        s = s.replace(/\blog\(/g, 'Math.log(');
+
+        // Ganti fungsi matematika standar
+        const mathFuncs = [
+            'sin', 'cos', 'tan', 'asin', 'acos', 'atan',
+            'sinh', 'cosh', 'tanh', 'exp', 'sqrt', 'abs', 'cbrt'
+        ];
+        mathFuncs.forEach(fn => {
+            const regex = new RegExp(`\\b${fn}\\(`, 'g');
+            s = s.replace(regex, `Math.${fn}(`);
+        });
+
+        // Ganti konstanta
+        s = s.replace(/\bpi\b/gi, 'Math.PI');
+        s = s.replace(/\be\b(?!\w)/g, 'Math.E');
+
+        // Perkalian implisit (contoh: 2x -> 2*x, 3( -> 3*(, )x -> )*x)
+        s = s.replace(/(\d+)([a-zA-Z(])/g, '$1*$2');
+        s = s.replace(/(\))([a-zA-Z\d(])/g, '$1*$2');
+        s = s.replace(/\bx\(/g, 'x*(');
+
+        return s;
+    }
+
+    function evaluateF(expr, x) {
+        const sanitized = sanitizeExpr(expr);
+        try {
+            const fn = new Function('x', 'Math', `"use strict"; return (${sanitized});`);
+            const val = Number(fn(x, Math));
+            if (isNaN(val) || !isFinite(val)) {
+                throw new Error(`Hasil f(${x.toFixed(4)}) tidak terdefinisi (NaN atau Tak Hingga).`);
+            }
+            return val;
+        } catch (err) {
+            throw new Error(`Gagal mengevaluasi fungsi pada x=${x.toFixed(4)}: ${err.message}`);
+        }
+    }
+
+    function evaluateDf(expr, dExpr, x, h = 1e-5) {
+        if (dExpr && dExpr.trim()) {
+            return evaluateF(dExpr, x);
+        }
+        // Pendekatan selisih pusat (central difference)
+        const fPlus = evaluateF(expr, x + h);
+        const fMinus = evaluateF(expr, x - h);
+        return (fPlus - fMinus) / (2.0 * h);
+    }
+
+    function generatePlotPoints(expr, xMin, xMax, numPoints = 120) {
+        const points = [];
+        if (xMax <= xMin) {
+            xMin -= 2;
+            xMax += 2;
+        }
+        const step = (xMax - xMin) / Math.max(numPoints, 10);
+        for (let i = 0; i <= numPoints; i++) {
+            const x = xMin + i * step;
+            try {
+                const y = evaluateF(expr, x);
+                if (Math.abs(y) < 1e7) {
+                    points.push({ x: Number(x.toFixed(5)), y: Number(y.toFixed(5)) });
+                } else {
+                    points.push({ x: Number(x.toFixed(5)), y: null });
+                }
+            } catch {
+                points.push({ x: Number(x.toFixed(5)), y: null });
+            }
+        }
+        return points;
+    }
+
+    function solveMetodeTabel(funcStr, a, b, n = 10) {
+        if (n < 1) throw new Error("Jumlah partisi (N) minimal harus 1.");
+        if (b <= a) throw new Error("Batas atas (b) harus lebih besar dari batas bawah (a).");
+
+        const h = (b - a) / n;
+        const table = [];
+        const signChanges = [];
+        let minAbsFx = Infinity;
+        let bestIdx = 0;
+
+        for (let i = 0; i <= n; i++) {
+            const xi = a + (i * h);
+            const fxi = evaluateF(funcStr, xi);
+            const absFx = Math.abs(fxi);
+
+            if (absFx < minAbsFx) {
+                minAbsFx = absFx;
+                bestIdx = i;
+            }
+
+            const row = {
+                iterasi: i,
+                x: xi,
+                fx: fxi,
+                sign_change: false,
+                is_best: false,
+                keterangan: "-"
+            };
+            table.push(row);
+
+            if (i > 0) {
+                const prevFx = table[i - 1].fx;
+                if ((prevFx * fxi) <= 0) {
+                    table[i - 1].sign_change = true;
+                    table[i].sign_change = true;
+                    const xPrev = table[i - 1].x;
+                    signChanges.push([xPrev, row.x]);
+                    table[i].keterangan = `Akar di antara [${xPrev.toFixed(currentPrecision)}, ${row.x.toFixed(currentPrecision)}]`;
+                }
+            }
+        }
+
+        table[bestIdx].is_best = true;
+        if (table[bestIdx].keterangan === "-") {
+            table[bestIdx].keterangan = "Aproksimasi terbaik (|f(x)| minimum)";
+        } else {
+            table[bestIdx].keterangan += " & |f(x)| terdekat ke nol";
+        }
+
+        const padding = (b - a) * 0.15;
+        const plotPoints = generatePlotPoints(funcStr, a - padding, b + padding);
+
+        return {
+            status: "success",
+            metode: "Metode Tabel",
+            fungsi: funcStr,
+            a: a,
+            b: b,
+            h: h,
+            n: n,
+            akar: table[bestIdx].x,
+            fx_akar: table[bestIdx].fx,
+            sign_changes: signChanges,
+            table: table,
+            plot_points: plotPoints
+        };
+    }
+
+    function solveMetodeBisection(funcStr, a, b, tol = 0.0001, maxIter = 50) {
+        if (b <= a) throw new Error("Batas atas (b) harus lebih besar dari batas bawah (a).");
+        if (tol <= 0) throw new Error("Toleransi error harus bernilai positif.");
+        if (maxIter < 1) throw new Error("Maksimum iterasi minimal 1.");
+
+        const fa = evaluateF(funcStr, a);
+        const fb = evaluateF(funcStr, b);
+
+        if (fa * fb > 0) {
+            throw new Error(
+                `f(a) = ${fa.toFixed(currentPrecision)} dan f(b) = ${fb.toFixed(currentPrecision)} memiliki tanda yang sama (f(a) × f(b) > 0). ` +
+                `Metode Bagi Dua mensyaratkan f(a) dan f(b) berlawanan tanda agar dapat mengurung akar.`
+            );
+        }
+
+        const table = [];
+        let converged = false;
+        let currentA = a;
+        let currentB = b;
+        let currentFa = fa;
+        let currentFb = fb;
+        let c = (a + b) / 2.0;
+        let fc = evaluateF(funcStr, c);
+        const rootHistory = [];
+
+        for (let i = 1; i <= maxIter; i++) {
+            c = (currentA + currentB) / 2.0;
+            fc = evaluateF(funcStr, c);
+            const error = Math.abs(currentB - currentA);
+            rootHistory.push({ iterasi: i, x: c, y: fc });
+
+            table.push({
+                iterasi: i,
+                a: currentA,
+                b: currentB,
+                c: c,
+                fa: currentFa,
+                fb: currentFb,
+                fc: fc,
+                error: error
+            });
+
+            if (error < tol || Math.abs(fc) < 1e-12) {
+                converged = true;
+                break;
+            }
+
+            if (currentFa * fc < 0) {
+                currentB = c;
+                currentFb = fc;
+            } else {
+                currentA = c;
+                currentFa = fc;
+            }
+        }
+
+        const domainMin = Math.min(a, b) - Math.abs(b - a) * 0.2;
+        const domainMax = Math.max(a, b) + Math.abs(b - a) * 0.2;
+        const plotPoints = generatePlotPoints(funcStr, domainMin, domainMax);
+
+        return {
+            status: "success",
+            metode: "Metode Bagi Dua (Bisection)",
+            fungsi: funcStr,
+            a_awal: a,
+            b_awal: b,
+            akar: c,
+            fx_akar: fc,
+            total_iterasi: table.length,
+            converged: converged,
+            toleransi: tol,
+            table: table,
+            plot_points: plotPoints,
+            root_history: rootHistory
+        };
+    }
+
+    function solveMetodeNewton(funcStr, dfuncStr, x0, tol = 0.0001, maxIter = 50) {
+        if (tol <= 0) throw new Error("Toleransi error harus bernilai positif.");
+        if (maxIter < 1) throw new Error("Maksimum iterasi minimal 1.");
+
+        const table = [];
+        let xr = Number(x0);
+        let converged = false;
+        const rootHistory = [];
+
+        for (let i = 1; i <= maxIter; i++) {
+            const fxr = evaluateF(funcStr, xr);
+            const dfxr = evaluateDf(funcStr, dfuncStr, xr);
+
+            rootHistory.push({ iterasi: i, x: xr, y: fxr });
+
+            if (Math.abs(dfxr) < 1e-12) {
+                throw new Error(
+                    `Turunan f'(${xr.toFixed(currentPrecision)}) = ${dfxr.toFixed(currentPrecision)} mendekati nol pada iterasi ${i}. ` +
+                    `Garis singgung horizontal membuat pembagian nol sehingga metode divergen.`
+                );
+            }
+
+            const xr1 = xr - (fxr / dfxr);
+            const error = Math.abs(xr1 - xr);
+
+            table.push({
+                iterasi: i,
+                xr: xr,
+                fxr: fxr,
+                dfxr: dfxr,
+                xr1: xr1,
+                error: error
+            });
+
+            if (error < tol || Math.abs(evaluateF(funcStr, xr1)) < 1e-12) {
+                converged = true;
+                xr = xr1;
+                rootHistory.push({ iterasi: i + 1, x: xr, y: evaluateF(funcStr, xr) });
+                break;
+            }
+
+            xr = xr1;
+        }
+
+        const fxFinal = evaluateF(funcStr, xr);
+        const allX = table.map(r => r.xr).concat([xr]);
+        const minX = Math.min(...allX);
+        const maxX = Math.max(...allX);
+        const span = Math.max(Math.abs(maxX - minX), 2.0);
+        const plotPoints = generatePlotPoints(funcStr, minX - span * 0.3, maxX + span * 0.3);
+
+        return {
+            status: "success",
+            metode: "Metode Newton-Raphson",
+            fungsi: funcStr,
+            turunan: (dfuncStr && dfuncStr.trim()) ? dfuncStr.trim() : "Numerik (Central Difference)",
+            x0: x0,
+            akar: xr,
+            fx_akar: fxFinal,
+            total_iterasi: table.length,
+            converged: converged,
+            toleransi: tol,
+            table: table,
+            plot_points: plotPoints,
+            root_history: rootHistory
+        };
+    }
+
+    // ==========================================
+    // INISIALISASI NAVIGASI & FORM
+    // ==========================================
     function setMethod(method) {
         if (!METHOD_CONFIG[method]) return;
         currentMethod = method;
@@ -199,50 +505,70 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     });
 
+    // Event Presisi Angka Desimal
+    if (selectPrecision) {
+        selectPrecision.addEventListener("change", (e) => {
+            currentPrecision = parseInt(e.target.value, 10);
+            if (lastResultData) {
+                renderResults(lastResultData);
+            }
+        });
+    }
+
+    // Event Salin Tabel (Clipboard)
+    if (btnCopyTable) {
+        btnCopyTable.addEventListener("click", copyTableToClipboard);
+    }
+
+    // Event Unduh CSV
+    if (btnDownloadCsv) {
+        btnDownloadCsv.addEventListener("click", downloadTableCSV);
+    }
+
     // Submit Form
     simForm.addEventListener("submit", (e) => {
         e.preventDefault();
         runSimulation();
     });
 
-    // Fungsi Utama Eksekusi Simulasi
-    async function runSimulation() {
+    // ==========================================
+    // EKSEKUSI SIMULASI
+    // ==========================================
+    function runSimulation() {
         hideAlert();
         btnSubmit.disabled = true;
         btnSubmit.textContent = "Menghitung...";
 
-        const payload = {
-            metode: currentMethod,
-            fungsi: inputFunc.value.trim()
-        };
-
-        if (currentMethod === "tabel") {
-            payload.a = parseFloat(inputA.value);
-            payload.b = parseFloat(inputB.value);
-            payload.n = parseInt(inputN.value, 10);
-        } else if (currentMethod === "bisection") {
-            payload.a = parseFloat(inputA.value);
-            payload.b = parseFloat(inputB.value);
-            payload.tol = parseFloat(inputTol.value);
-            payload.max_iter = parseInt(inputMaxIter.value, 10);
-        } else if (currentMethod === "newton") {
-            payload.dfungsi = inputDfunc.value.trim();
-            payload.x0 = parseFloat(inputX0.value);
-            payload.tol = parseFloat(inputTol.value);
-            payload.max_iter = parseInt(inputMaxIter.value, 10);
+        const funcVal = inputFunc.value.trim();
+        if (!funcVal) {
+            showAlert("Fungsi f(x) tidak boleh kosong.");
+            btnSubmit.disabled = false;
+            btnSubmit.textContent = "Jalankan Simulasi";
+            return;
         }
 
         try {
-            const resp = await fetch("/api/simulasi", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(payload)
-            });
+            let data = null;
 
-            const data = await resp.json();
+            if (currentMethod === "tabel") {
+                const a = parseFloat(inputA.value);
+                const b = parseFloat(inputB.value);
+                const n = parseInt(inputN.value, 10);
+                data = solveMetodeTabel(funcVal, a, b, n);
 
-            if (!resp.ok || data.status === "error") {
-                throw new Error(data.message || "Gagal memproses simulasi numerik.");
+            } else if (currentMethod === "bisection") {
+                const a = parseFloat(inputA.value);
+                const b = parseFloat(inputB.value);
+                const tol = parseFloat(inputTol.value);
+                const maxIter = parseInt(inputMaxIter.value, 10);
+                data = solveMetodeBisection(funcVal, a, b, tol, maxIter);
+
+            } else if (currentMethod === "newton") {
+                const dfunc = inputDfunc.value.trim();
+                const x0 = parseFloat(inputX0.value);
+                const tol = parseFloat(inputTol.value);
+                const maxIter = parseInt(inputMaxIter.value, 10);
+                data = solveMetodeNewton(funcVal, dfunc, x0, tol, maxIter);
             }
 
             lastResultData = data;
@@ -258,7 +584,9 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Tampilkan Hasil (Stats, Grafik, dan Tabel)
+    // ==========================================
+    // RENDER HASIL
+    // ==========================================
     function renderResults(data) {
         // 1. Update Stat Cards
         statAkar.textContent = formatNum(data.akar);
@@ -296,7 +624,6 @@ document.addEventListener("DOMContentLoaded", () => {
         renderConclusion(data);
     }
 
-    // Buat Kalimat Kesimpulan Otomatis Sesuai Metode
     function renderConclusion(data) {
         if (!conclusionSection || !conclusionText) return;
         conclusionSection.style.display = "block";
@@ -336,7 +663,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // Render Grafik Menggunakan Chart.js
     function renderChart(data) {
         const ctx = document.getElementById("functionChart").getContext("2d");
 
@@ -351,7 +677,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 backgroundColor: "transparent",
                 borderWidth: 2,
                 pointRadius: 0,
-                tension: 0.15,
+                tension: 0, // Garis linear eksak tanpa cubic spline overshoot
                 type: "line"
             },
             {
@@ -387,7 +713,7 @@ document.addEventListener("DOMContentLoaded", () => {
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                animation: { duration: 350 },
+                animation: { duration: 300 },
                 plugins: {
                     legend: {
                         position: "top",
@@ -399,7 +725,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     tooltip: {
                         callbacks: {
                             label: function(context) {
-                                return `x: ${context.parsed.x.toFixed(3)}, y: ${context.parsed.y.toFixed(3)}`;
+                                return `x: ${context.parsed.x.toFixed(currentPrecision)}, y: ${context.parsed.y.toFixed(currentPrecision)}`;
                             }
                         }
                     }
@@ -428,7 +754,6 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
-    // Render Tabel Sesuai Metode
     function renderTable(data) {
         tableHead.innerHTML = "";
         tableBody.innerHTML = "";
@@ -459,8 +784,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 tr.innerHTML = `
                     <td>${row.iterasi}</td>
-                    <td class="num">${row.x.toFixed(3)}</td>
-                    <td class="num">${row.fx.toFixed(3)}</td>
+                    <td class="num">${formatNum(row.x)}</td>
+                    <td class="num">${formatNum(row.fx)}</td>
                     <td>${signBadge}</td>
                     <td>${ketBadge}</td>
                 `;
@@ -488,13 +813,13 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 tr.innerHTML = `
                     <td>${row.iterasi}</td>
-                    <td class="num">${row.a.toFixed(3)}</td>
-                    <td class="num">${row.b.toFixed(3)}</td>
-                    <td class="num" style="font-weight: 600;">${row.c.toFixed(3)}</td>
-                    <td class="num">${row.fa.toFixed(3)}</td>
-                    <td class="num">${row.fb.toFixed(3)}</td>
-                    <td class="num">${row.fc.toFixed(3)}</td>
-                    <td class="num">${row.error.toFixed(3)}</td>
+                    <td class="num">${formatNum(row.a)}</td>
+                    <td class="num">${formatNum(row.b)}</td>
+                    <td class="num" style="font-weight: 600;">${formatNum(row.c)}</td>
+                    <td class="num">${formatNum(row.fa)}</td>
+                    <td class="num">${formatNum(row.fb)}</td>
+                    <td class="num">${formatNum(row.fc)}</td>
+                    <td class="num">${formatNum(row.error)}</td>
                 `;
                 tableBody.appendChild(tr);
             });
@@ -518,27 +843,93 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 tr.innerHTML = `
                     <td>${row.iterasi}</td>
-                    <td class="num">${row.xr.toFixed(3)}</td>
-                    <td class="num">${row.fxr.toFixed(3)}</td>
-                    <td class="num">${row.dfxr.toFixed(3)}</td>
-                    <td class="num" style="font-weight: 600;">${row.xr1.toFixed(3)}</td>
-                    <td class="num">${row.error.toFixed(3)}</td>
+                    <td class="num">${formatNum(row.xr)}</td>
+                    <td class="num">${formatNum(row.fxr)}</td>
+                    <td class="num">${formatNum(row.dfxr)}</td>
+                    <td class="num" style="font-weight: 600;">${formatNum(row.xr1)}</td>
+                    <td class="num">${formatNum(row.error)}</td>
                 `;
                 tableBody.appendChild(tr);
             });
         }
     }
 
-    // Utility: Format Number
+    // ==========================================
+    // UTILITY: FORMAT NUMBER, COPY & CSV
+    // ==========================================
     function formatNum(num) {
         if (num === null || num === undefined) return "-";
         if (typeof num === "number") {
-            return num.toFixed(3);
+            return num.toFixed(currentPrecision);
         }
         return num;
     }
 
-    // Helper Alert
+    function copyTableToClipboard() {
+        if (!lastResultData || !lastResultData.table || lastResultData.table.length === 0) {
+            showAlert("Belum ada data tabel yang bisa disalin.");
+            return;
+        }
+
+        const tableEl = document.getElementById("iteration-table");
+        let text = "";
+
+        // Ambil Header
+        const headers = Array.from(tableEl.querySelectorAll("thead th")).map(th => th.innerText.trim());
+        text += headers.join("\t") + "\n";
+
+        // Ambil Baris Data
+        const rows = tableEl.querySelectorAll("tbody tr");
+        rows.forEach(r => {
+            const cols = Array.from(r.querySelectorAll("td")).map(td => td.innerText.trim());
+            text += cols.join("\t") + "\n";
+        });
+
+        navigator.clipboard.writeText(text).then(() => {
+            const originalText = btnCopyTable.innerHTML;
+            btnCopyTable.innerHTML = "✓ Tersalin!";
+            btnCopyTable.style.backgroundColor = "var(--status-success-bg)";
+            btnCopyTable.style.color = "var(--status-success-text)";
+            setTimeout(() => {
+                btnCopyTable.innerHTML = originalText;
+                btnCopyTable.style.backgroundColor = "";
+                btnCopyTable.style.color = "";
+            }, 2000);
+        }).catch(err => {
+            showAlert("Gagal menyalin ke clipboard: " + err);
+        });
+    }
+
+    function downloadTableCSV() {
+        if (!lastResultData || !lastResultData.table || lastResultData.table.length === 0) {
+            showAlert("Belum ada data tabel yang bisa diunduh.");
+            return;
+        }
+
+        const tableEl = document.getElementById("iteration-table");
+        let csv = [];
+
+        // Header
+        const headers = Array.from(tableEl.querySelectorAll("thead th")).map(th => `"${th.innerText.trim()}"`);
+        csv.push(headers.join(","));
+
+        // Rows
+        const rows = tableEl.querySelectorAll("tbody tr");
+        rows.forEach(r => {
+            const cols = Array.from(r.querySelectorAll("td")).map(td => `"${td.innerText.trim()}"`);
+            csv.push(cols.join(","));
+        });
+
+        const csvBlob = new Blob([csv.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+        const link = document.createElement("a");
+        const filename = `numsim_${currentMethod}_${new Date().toISOString().slice(0, 10)}.csv`;
+        link.href = URL.createObjectURL(csvBlob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
     function showAlert(msg) {
         alertMsg.textContent = msg;
         alertBox.style.display = "flex";
@@ -549,6 +940,6 @@ document.addEventListener("DOMContentLoaded", () => {
         alertBox.style.display = "none";
     }
 
-    // Eksekusi default saat pertama kali dimuat
+    // Eksekusi default saat pertama kali halaman dibuka
     runSimulation();
 });
