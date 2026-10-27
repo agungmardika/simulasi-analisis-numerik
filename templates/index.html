@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tugas 4 Analisis Numerik - Mohammad Agung Dwi Mardika</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+    <!-- Chart.js untuk visualisasi grafik kurva -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Top Navigation Bar -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <!-- Identitas Mahasiswa di Navbar -->
+            <div class="nav-identity">
+                <div class="identity-name">Mohammad Agung Dwi Mardika</div>
+                <div class="identity-meta">
+                    <span class="identity-nim">NIM: 2511016110012</span>
+                    <span class="identity-divider">&bull;</span>
+                    <span class="identity-tag">Tugas 4 Analisis Numerik</span>
+                </div>
+            </div>
+
+            <!-- Tab Pilihan Metode -->
+            <ul class="nav-menu" id="nav-menu">
+                <li class="nav-item">
+                    <button class="nav-btn active" data-target="tabel" id="nav-tabel">
+                        <span class="nav-num">1</span> Metode Tabel
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-btn" data-target="bisection" id="nav-bisection">
+                        <span class="nav-num">2</span> Metode Bisection
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-btn" data-target="newton" id="nav-newton">
+                        <span class="nav-num">3</span> Newton-Raphson
+                    </button>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main class="main-container">
+        <!-- Banner Narasi Tugas (Alami, Santai, Tidak Kaku) -->
+        <section class="task-intro-card">
+            <div class="task-intro-header">
+                <span class="task-pill">Tugas 4 &bull; Analisis Numerik</span>
+            </div>
+            <p class="task-intro-text">
+                Website interaktif ini disusun oleh <strong>Mohammad Agung Dwi Mardika</strong> (NIM: <strong>2511016110012</strong>) untuk memenuhi <strong>Tugas 4 mata kuliah Analisis Numerik</strong>. Di sini disajikan perbandingan langkah komputasi pencarian akar fungsi nonlinear melalui tiga pendekatan: <strong>Metode Tabel</strong> (penelusuran inkremental), <strong>Metode Bagi Dua (Bisection)</strong> (pengurung interval tertutup), dan <strong>Metode Newton-Raphson</strong> (pendekatan garis singgung turunan).
+            </p>
+        </section>
+
+        <!-- Header Info Metode Aktif & Presets -->
+        <header class="section-header">
+            <div class="header-content">
+                <h1 id="page-title">Metode Tabel (Pencarian Inkremental)</h1>
+                <p id="page-desc" class="text-muted">
+                    Membagi domain nilai interval [a, b] menjadi N bagian berukuran sama untuk mendeteksi letak akar fungsi.
+                </p>
+            </div>
+            <!-- Preset Cepat -->
+            <div class="preset-box">
+                <span class="preset-label">Uji Contoh Cepat:</span>
+                <button type="button" class="btn-preset" data-func="x**3 - x - 2" data-a="1" data-b="2" data-x0="1.5">x³ - x - 2 = 0</button>
+                <button type="button" class="btn-preset" data-func="exp(-x) - x" data-a="0" data-b="1" data-x0="0.5">e⁻ˣ - x = 0</button>
+                <button type="button" class="btn-preset" data-func="x**2 - 4" data-a="1" data-b="3" data-x0="1">x² - 4 = 0</button>
+                <button type="button" class="btn-preset" data-func="cos(x) - x" data-a="0" data-b="1" data-x0="0.5">cos(x) - x = 0</button>
+            </div>
+        </header>
+
+        <!-- Simulation Grid: Input & Grafik -->
+        <div class="simulation-grid">
+            <!-- Panel Parameter Input -->
+            <section class="card input-card">
+                <div class="card-header">
+                    <h2>Parameter Masukan</h2>
+                </div>
+                <form id="sim-form" class="card-body">
+                    <!-- Input Fungsi f(x) -->
+                    <div class="form-group">
+                        <label for="input-func">Fungsi f(x)</label>
+                        <input type="text" id="input-func" name="fungsi" value="x**3 - x - 2" placeholder="contoh: x**3 - x - 2" required>
+                        <span class="input-hint">Operator: +, -, *, /, **, sin, cos, tan, exp, log, sqrt</span>
+                    </div>
+
+                    <!-- Input Khusus Newton: Turunan f'(x) -->
+                    <div class="form-group method-field newton-only" style="display: none;">
+                        <label for="input-dfunc">Turunan f'(x) <span class="badge-optional">Opsional</span></label>
+                        <input type="text" id="input-dfunc" name="dfungsi" placeholder="contoh: 3*x**2 - 1 (kosong = numerik)">
+                        <span class="input-hint">Jika dikosongkan, turunan f'(x) dihitung secara numerik</span>
+                    </div>
+
+                    <!-- Batas Interval [a, b] untuk Tabel & Bisection -->
+                    <div class="form-row method-field tabel-and-bisection">
+                        <div class="form-group col">
+                            <label for="input-a">Batas Bawah (a)</label>
+                            <input type="number" step="any" id="input-a" name="a" value="1">
+                        </div>
+                        <div class="form-group col">
+                            <label for="input-b">Batas Atas (b)</label>
+                            <input type="number" step="any" id="input-b" name="b" value="2">
+                        </div>
+                    </div>
+
+                    <!-- Input Khusus Tabel: Jumlah Pembagi N -->
+                    <div class="form-group method-field tabel-only">
+                        <label for="input-n">Jumlah Pembagi (N)</label>
+                        <input type="number" id="input-n" name="n" value="10" min="1" max="500">
+                        <span class="input-hint">Lebar partisi h = (b - a) / N</span>
+                    </div>
+
+                    <!-- Input Khusus Newton: Titik Awal x0 -->
+                    <div class="form-group method-field newton-only" style="display: none;">
+                        <label for="input-x0">Titik Awal (x₀)</label>
+                        <input type="number" step="any" id="input-x0" name="x0" value="1.5">
+                    </div>
+
+                    <!-- Toleransi dan Maks Iterasi untuk Bisection & Newton -->
+                    <div class="form-row method-field bisection-and-newton" style="display: none;">
+                        <div class="form-group col">
+                            <label for="input-tol">Toleransi Error (ε)</label>
+                            <input type="text" id="input-tol" name="tol" value="0.001">
+                        </div>
+                        <div class="form-group col">
+                            <label for="input-max-iter">Maks. Iterasi</label>
+                            <input type="number" id="input-max-iter" name="max_iter" value="50" min="1" max="200">
+                        </div>
+                    </div>
+
+                    <!-- Tombol Eksekusi -->
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary" id="btn-submit">
+                            Jalankan Simulasi
+                        </button>
+                    </div>
+                </form>
+            </section>
+
+            <!-- Panel Grafik & Ringkasan -->
+            <section class="card output-card">
+                <div class="card-header flex-between">
+                    <h2>Visualisasi Kurva & Akar</h2>
+                    <span id="chart-status" class="status-pill status-neutral">Menunggu simulasi</span>
+                </div>
+                <div class="card-body">
+                    <div class="chart-wrapper">
+                        <canvas id="functionChart"></canvas>
+                    </div>
+
+                    <!-- Ringkasan Hasil Cepat -->
+                    <div class="summary-cards" id="summary-cards">
+                        <div class="stat-card">
+                            <span class="stat-label">Akar (x)</span>
+                            <span class="stat-val" id="stat-akar">-</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">Nilai f(x)</span>
+                            <span class="stat-val" id="stat-fx">-</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">Jumlah Iterasi / Titik</span>
+                            <span class="stat-val" id="stat-iter">-</span>
+                        </div>
+                        <div class="stat-card">
+                            <span class="stat-label">Status Evaluasi</span>
+                            <span class="stat-val" id="stat-converge">-</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Kotak Kesimpulan Hasil Perhitungan -->
+        <section class="card conclusion-card" id="conclusion-section" style="display: none;">
+            <div class="conclusion-content">
+                <div class="conclusion-header">
+                    <span class="conclusion-badge">Kesimpulan Perhitungan</span>
+                </div>
+                <p class="conclusion-text" id="conclusion-text">
+                    <!-- Teks kesimpulan otomatis -->
+                </p>
+            </div>
+        </section>
+
+        <!-- Alert Pesan Error / Informasi -->
+        <div id="alert-box" class="alert alert-error" style="display: none;">
+            <span class="alert-icon">⚠️</span>
+            <span id="alert-msg">Terjadi kesalahan perhitungan.</span>
+        </div>
+
+        <!-- Tabel Iterasi Detail -->
+        <section class="card table-card" id="results-section">
+            <div class="card-header">
+                <h2>Tabel Komputasi Langkah demi Langkah</h2>
+                <p class="text-muted" id="table-subtitle">Hasil evaluasi numerik langkah demi langkah.</p>
+            </div>
+            <div class="card-body table-responsive">
+                <table class="data-table" id="iteration-table">
+                    <thead id="table-head">
+                        <!-- Header dinamis -->
+                    </thead>
+                    <tbody id="table-body">
+                        <tr>
+                            <td colspan="7" class="text-center text-muted py-4">
+                                Klik tombol <strong>"Jalankan Simulasi"</strong> untuk melihat rincian tabel perhitungan.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Informasi Teori & Rumus -->
+        <section class="card theory-card">
+            <div class="card-header">
+                <h2>Ringkasan Rumus & Karakteristik Metode</h2>
+            </div>
+            <div class="card-body" id="theory-content">
+                <!-- Konten dinamis -->
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer dengan Identitas Mahasiswa -->
+    <footer class="footer">
+        <div class="footer-container">
+            <div class="footer-student">
+                <strong>Mohammad Agung Dwi Mardika</strong> &bull; NIM: 2511016110012
+            </div>
+            <div class="footer-context">
+                Pemenuhan Tugas 4 Analisis Numerik
+            </div>
+        </div>
+    </footer>
+
+    <script src="/static/js/script.js"></script>
+</body>
+</html>
